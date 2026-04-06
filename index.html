@@ -3,15 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>多人連線骰子模擬器</title>
-    <!-- 引入 Tailwind CSS (樣式控制) -->
+    <title>多人連線骰子模擬器 - 穩定修復版</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 Lucide 圖示 -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
         body { font-family: 'Inter', sans-serif; }
-        .dice-shadow { shadow-inner border-2 border-gray-100; }
         .preserve-3d { transform-style: preserve-3d; }
         @keyframes shake {
             0%, 100% { transform: translate(0, 0) rotate(0); }
@@ -30,7 +27,15 @@
 </head>
 <body class="bg-slate-50 min-h-screen text-slate-900">
 
-    <!-- 1. 大廳介面 (輸入房間號碼與選擇大頭貼) -->
+    <!-- 放棄遊戲按鈕 -->
+    <div id="quitContainer" class="hidden fixed top-6 right-6 z-50">
+        <button onclick="requestQuit()" class="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-100 rounded-xl font-bold hover:bg-red-100 transition-all shadow-sm">
+            <i data-lucide="log-out" size="18"></i>
+            放棄遊戲
+        </button>
+    </div>
+
+    <!-- 1. 大廳介面 -->
     <div id="lobby" class="max-w-md mx-auto pt-20 px-6">
         <div class="bg-white rounded-3xl shadow-xl p-8 border border-slate-100">
             <div class="text-center mb-8">
@@ -53,7 +58,7 @@
                     <div class="grid grid-cols-5 gap-2" id="avatarSelect">
                         <button onclick="selectAvatar('🐶')" class="avatar-btn p-3 text-2xl bg-slate-50 rounded-xl border-2 border-transparent hover:bg-indigo-50 transition-all">🐶</button>
                         <button onclick="selectAvatar('🐱')" class="avatar-btn p-3 text-2xl bg-slate-50 rounded-xl border-2 border-transparent hover:bg-indigo-50 transition-all">🐱</button>
-                        <button onclick="selectAvatar('🦊')" class="avatar-btn p-3 text-2xl bg-slate-50 rounded-xl border-2 border-transparent hover:bg-indigo-50 transition-all">🦊</button>
+                        <button onclick="selectAvatar(' foxes')" class="avatar-btn p-3 text-2xl bg-slate-50 rounded-xl border-2 border-transparent hover:bg-indigo-50 transition-all">🦊</button>
                         <button onclick="selectAvatar('🐻')" class="avatar-btn p-3 text-2xl bg-slate-50 rounded-xl border-2 border-transparent hover:bg-indigo-50 transition-all">🐻</button>
                         <button onclick="selectAvatar('🦁')" class="avatar-btn p-3 text-2xl bg-slate-50 rounded-xl border-2 border-transparent hover:bg-indigo-50 transition-all">🦁</button>
                     </div>
@@ -67,23 +72,21 @@
         </div>
     </div>
 
-    <!-- 2. 等待介面 (顯示已加入人數) -->
+    <!-- 2. 等待介面 -->
     <div id="waitingRoom" class="hidden max-w-md mx-auto pt-20 px-6">
         <div class="bg-white rounded-3xl shadow-xl p-8 border border-slate-100 text-center">
-            <div class="animate-bounce inline-block p-4 bg-amber-100 text-amber-600 rounded-full mb-6">
+            <div id="waitingIcon" class="animate-bounce inline-block p-4 bg-amber-100 text-amber-600 rounded-full mb-6">
                 <i data-lucide="users" size="32"></i>
             </div>
-            <h2 class="text-2xl font-bold mb-2">等待玩家中...</h2>
+            <h2 id="waitingStatus" class="text-2xl font-bold mb-2">等待玩家中...</h2>
             <p class="text-slate-500 mb-8">房間號碼: <span id="displayRoomId" class="font-bold text-indigo-600"></span></p>
             
-            <div class="space-y-4 text-left" id="playerListWaiting">
-                <!-- 玩家列表會在這裡顯示 -->
-            </div>
+            <div class="space-y-4 text-left" id="playerListWaiting"></div>
 
             <div class="mt-8 p-4 bg-slate-50 rounded-2xl">
-                <p class="text-sm text-slate-400">滿 4 人後將自動開始遊戲</p>
+                <p id="progressText" class="text-sm text-slate-400">滿 4 人後將自動開始遊戲</p>
                 <div class="w-full bg-slate-200 h-2 rounded-full mt-3 overflow-hidden">
-                    <div id="progressBar" class="bg-indigo-600 h-full transition-all duration-500" style="width: 25%"></div>
+                    <div id="progressBar" class="bg-indigo-600 h-full transition-all duration-500" style="width: 0%"></div>
                 </div>
             </div>
         </div>
@@ -93,7 +96,6 @@
     <div id="gameRoom" class="hidden max-w-4xl mx-auto px-4 py-12">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2 space-y-6">
-                <!-- 狀態顯示 -->
                 <div id="turnIndicator" class="bg-indigo-600 text-white p-4 rounded-2xl shadow-lg flex items-center justify-between">
                     <div class="flex items-center gap-3">
                         <span id="currentAvatar" class="text-2xl">🐶</span>
@@ -105,15 +107,10 @@
                     <div class="text-xs opacity-80">房間: <span id="gameRoomId"></span></div>
                 </div>
 
-                <!-- 骰子區域 -->
                 <div class="bg-white rounded-3xl shadow-xl p-12 border border-slate-100 flex flex-col items-center justify-center min-h-[400px]">
                     <div id="diceContainer" class="w-24 h-24 mb-12 relative preserve-3d">
-                        <!-- 骰子面會由 JS 動態生成 -->
-                        <div id="dice" class="w-full h-full bg-white rounded-2xl shadow-inner border-2 border-slate-100 grid grid-cols-3 grid-rows-3 gap-1 p-3">
-                            <!-- 點數 -->
-                        </div>
+                        <div id="dice" class="w-full h-full bg-white rounded-2xl shadow-inner border-2 border-slate-100 grid grid-cols-3 grid-rows-3 gap-1 p-3"></div>
                     </div>
-
                     <button id="rollBtn" onclick="handleRoll()" 
                         class="w-full max-w-xs py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xl rounded-2xl shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                         投擲骰子
@@ -121,83 +118,67 @@
                     <p id="rollHint" class="mt-4 text-sm text-slate-400"></p>
                 </div>
             </div>
-
-            <!-- 玩家列表 -->
             <div class="space-y-4">
                 <h3 class="font-bold text-slate-700 px-2">玩家順序</h3>
-                <div id="playerListGame" class="space-y-3">
-                    <!-- 玩家卡片 -->
-                </div>
+                <div id="playerListGame" class="space-y-3"></div>
             </div>
         </div>
     </div>
 
-    <!-- Firebase SDK (使用相容版本方便單一檔案執行) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
     <script>
         // ============================================================
         // ⚠️ 【新手教學】請在這裡貼上您的 Firebase 設定金鑰 ⚠️
-        // 1. 前往 Firebase 控制台 (https://console.firebase.google.com/)
-        // 2. 點擊您的專案 -> 專案設定 (齒輪圖示)
-        // 3. 在「您的應用程式」下方找到「SDK 設定與配置」
-        // 4. 選擇「CDN」或「配置」，複製 firebaseConfig 的內容貼到下面
         // ============================================================
         const firebaseConfig = {
-            apiKey: "您的_API_KEY",
-            authDomain: "您的_AUTH_DOMAIN",
-            databaseURL: "您的_DATABASE_URL", // ⚠️ Realtime Database 必須有這一行
-            projectId: "您的_PROJECT_ID",
-            storageBucket: "您的_STORAGE_BUCKET",
-            messagingSenderId: "您的_MESSAGING_SENDER_ID",
-            appId: "您的_APP_ID"
+      apiKey: "AIzaSyDSsHOsT_WL5AEUswI9Q6sYq0I14sIlILw",
+  authDomain: "dice-14871.firebaseapp.com",
+  databaseURL: "https://dice-14871-default-rtdb.firebaseio.com",
+  projectId: "dice-14871",
+  storageBucket: "dice-14871.firebasestorage.app",
+  messagingSenderId: "174954518651",
+  appId: "1:174954518651:web:a455e402c5f69ef3902ade",
+  measurementId: "G-1TWCHXVD5D"
         };
         // ============================================================
 
-        // 初始化 Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // 遊戲狀態變數
-        let myId = Math.random().toString(36).substring(7); // 隨機生成自己的 ID
+        let myId = Math.random().toString(36).substring(7);
         let myAvatar = '🐶';
         let currentRoomId = '';
         let roomData = null;
         let timeoutInterval = null;
-        const TURN_TIMEOUT_MS = 30000; // 30 秒超時
+        let countdownInterval = null;
+        let currentCountdownTarget = null;
+        let isRolling = false;
+        const TURN_TIMEOUT_MS = 30000;
 
-        // 初始化圖示
         lucide.createIcons();
 
-        // 選擇大頭貼
         function selectAvatar(emoji) {
             myAvatar = emoji;
             document.querySelectorAll('.avatar-btn').forEach(btn => {
                 btn.classList.remove('border-indigo-600', 'bg-indigo-50');
-                if (btn.innerText === emoji) btn.classList.add('border-indigo-600', 'bg-indigo-50');
+                if (btn.innerText.trim() === emoji.trim()) btn.classList.add('border-indigo-600', 'bg-indigo-50');
             });
         }
         selectAvatar('🐶');
 
-        // 加入房間
         function joinRoom() {
             const roomId = document.getElementById('roomInput').value.trim();
             if (!roomId) return alert('請輸入房間號碼');
             currentRoomId = roomId;
 
             const roomRef = db.ref('rooms/' + roomId);
-            
             roomRef.get().then(snapshot => {
-                let data = snapshot.val() || { players: {}, status: 'waiting', currentTurn: 0 };
-                
-                // 檢查是否已滿 4 人
-                const playerCount = data.players ? Object.keys(data.players).length : 0;
-                if (playerCount >= 4 && !data.players[myId]) {
-                    return alert('房間已滿！');
-                }
+                let data = snapshot.val() || { players: {}, status: 'waiting' };
+                const players = data.players || {};
+                if (Object.keys(players).length >= 4 && !players[myId]) return alert('房間已滿！');
 
-                // 加入自己
                 roomRef.child('players/' + myId).set({
                     id: myId,
                     avatar: myAvatar,
@@ -209,33 +190,116 @@
             });
         }
 
-        // 監聽房間變化
-        function listenToRoom() {
-            db.ref('rooms/' + currentRoomId).on('value', snapshot => {
+   function listenToRoom() {
+            const roomRef = db.ref('rooms/' + currentRoomId);
+            roomRef.on('value', snapshot => {
                 roomData = snapshot.val();
                 if (!roomData) return;
+
+                // 處理放棄遊戲
+                if (roomData.status === 'quit') {
+                    roomRef.off();
+                    alert('有玩家放棄了遊戲，回到大廳。');
+                    resetToLobby();
+                    return;
+                }
 
                 const players = Object.values(roomData.players || {}).sort((a, b) => a.joinedAt - b.joinedAt);
                 const count = players.length;
 
-                // 更新等待畫面
                 updateWaitingUI(players, count);
 
-                // 如果滿 4 人且狀態還是 waiting，則隨機分配順序並開始
-                if (count === 4 && roomData.status === 'waiting') {
-                    startMatch(players);
+                // 🌟 修復關鍵：加上 !roomData.status 的判斷
+                // 滿 4 人且在等待中（或新房間沒有狀態） -> 房主發起倒數
+                if (count === 4 && (!roomData.status || roomData.status === 'waiting')) {
+                    if (players[0].id === myId) {
+                        roomRef.update({ 
+                            status: 'starting', 
+                            startTime: Date.now() + 5000 
+                        });
+                    }
                 }
 
-                // 如果已經開始，顯示遊戲畫面
+                // 處理倒數畫面
+                if (roomData.status === 'starting' && roomData.startTime) {
+                    handleStartCountdown(roomData.startTime, players);
+                }
+
+                // 進入遊戲畫面
                 if (roomData.status === 'playing') {
-                    showGameRoom(players);
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                        countdownInterval = null;
+                        currentCountdownTarget = null;
+                    }
+                    showGameRoom();
                 }
             });
+        }
+
+        function handleStartCountdown(startTime, players) {
+            // 如果目標時間沒變，就不重新啟動計時器 (防止被 Firebase 更新打斷)
+            if (currentCountdownTarget === startTime) return;
+            currentCountdownTarget = startTime;
+
+            if (countdownInterval) clearInterval(countdownInterval);
+            
+            const statusText = document.getElementById('waitingStatus');
+            const progressText = document.getElementById('progressText');
+            
+            countdownInterval = setInterval(() => {
+                const now = Date.now();
+                const diff = Math.max(0, Math.ceil((startTime - now) / 1000));
+                
+                statusText.innerText = `遊戲即將開始... ${diff}s`;
+                progressText.innerText = `準備進入遊戲中...`;
+                
+                if (diff <= 0) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                    // 只有房主負責切換到 playing 狀態
+                    if (players[0].id === myId) startMatch(players);
+                }
+            }, 200);
+        }
+
+        function startMatch(players) {
+            const shuffledIds = players.map(p => p.id).sort(() => Math.random() - 0.5);
+            db.ref('rooms/' + currentRoomId).update({
+                status: 'playing',
+                turnOrder: shuffledIds,
+                currentTurn: 0,
+                lastRoll: 1,
+                turnStartTime: Date.now()
+            });
+        }
+
+        function requestQuit() {
+            if (!currentRoomId) return;
+            if (confirm('確定要放棄遊戲嗎？這會讓所有玩家都回到大廳。')) {
+                db.ref('rooms/' + currentRoomId).update({ status: 'quit' });
+            }
+        }
+
+        function resetToLobby() {
+            if (timeoutInterval) clearInterval(timeoutInterval);
+            if (countdownInterval) clearInterval(countdownInterval);
+            
+            document.getElementById('lobby').classList.remove('hidden');
+            document.getElementById('waitingRoom').classList.add('hidden');
+            document.getElementById('gameRoom').classList.add('hidden');
+            document.getElementById('quitContainer').classList.add('hidden');
+            
+            document.getElementById('waitingStatus').innerText = "等待玩家中...";
+            document.getElementById('progressText').innerText = "滿 4 人後將自動開始遊戲";
+            currentRoomId = '';
+            currentCountdownTarget = null;
         }
 
         function updateWaitingUI(players, count) {
             document.getElementById('displayRoomId').innerText = currentRoomId;
             document.getElementById('progressBar').style.width = (count / 4 * 100) + '%';
+            document.getElementById('quitContainer').classList.remove('hidden');
             
             const list = document.getElementById('playerListWaiting');
             list.innerHTML = players.map((p, i) => `
@@ -247,28 +311,12 @@
             `).join('');
         }
 
-        function startMatch(players) {
-            // 只有第一個進入的人負責初始化順序 (避免重複)
-            if (players[0].id !== myId) return;
-
-            // 隨機打亂順序
-            const shuffledIds = players.map(p => p.id).sort(() => Math.random() - 0.5);
-            
-            db.ref('rooms/' + currentRoomId).update({
-                status: 'playing',
-                turnOrder: shuffledIds,
-                currentTurn: 0,
-                lastRoll: 1,
-                turnStartTime: Date.now()
-            });
-        }
-
         function showWaitingRoom() {
             document.getElementById('lobby').classList.add('hidden');
             document.getElementById('waitingRoom').classList.remove('hidden');
         }
 
-        function showGameRoom(players) {
+        function showGameRoom() {
             document.getElementById('waitingRoom').classList.add('hidden');
             document.getElementById('gameRoom').classList.remove('hidden');
             document.getElementById('gameRoomId').innerText = currentRoomId;
@@ -278,17 +326,12 @@
             const currentPlayerId = turnOrder[currentTurnIdx];
             const currentPlayer = roomData.players[currentPlayerId];
 
-            // 更新狀態列
             document.getElementById('currentAvatar').innerText = currentPlayer.avatar;
             document.getElementById('currentPlayerName').innerText = (currentPlayerId === myId ? '你' : '玩家 ' + (currentTurnIdx + 1));
             
-            // 更新骰子點數
             updateDiceUI(roomData.lastRoll);
-
-            // 啟動超時倒數計時器
             startTimeoutTimer(roomData.turnStartTime);
 
-            // 更新玩家列表
             const list = document.getElementById('playerListGame');
             list.innerHTML = turnOrder.map((id, i) => {
                 const p = roomData.players[id];
@@ -305,7 +348,6 @@
                 `;
             }).join('');
 
-            // 控制按鈕
             const rollBtn = document.getElementById('rollBtn');
             const rollHint = document.getElementById('rollHint');
             if (currentPlayerId === myId) {
@@ -319,7 +361,6 @@
             }
         }
 
-        // 投擲邏輯
         function handleRoll() {
             if (isRolling) return;
             isRolling = true;
@@ -329,13 +370,10 @@
             setTimeout(() => {
                 diceEl.classList.remove('shaking');
                 diceEl.classList.add('rolling');
-                
                 setTimeout(() => {
                     diceEl.classList.remove('rolling');
                     const newValue = Math.floor(Math.random() * 6) + 1;
                     isRolling = false;
-                    
-                    // 更新 Firebase
                     const nextTurn = (roomData.currentTurn + 1) % 4;
                     db.ref('rooms/' + currentRoomId).update({
                         lastRoll: newValue,
@@ -346,19 +384,14 @@
             }, 400);
         }
 
-        // 超時處理邏輯
         function startTimeoutTimer(startTime) {
             if (timeoutInterval) clearInterval(timeoutInterval);
-            
             const timerDisplay = document.getElementById('timerDisplay');
-            
             timeoutInterval = setInterval(() => {
                 const now = Date.now();
                 const elapsed = now - startTime;
                 const remaining = Math.max(0, Math.floor((TURN_TIMEOUT_MS - elapsed) / 1000));
-                
                 timerDisplay.innerText = `剩餘: ${remaining}s`;
-                
                 if (remaining <= 0) {
                     clearInterval(timeoutInterval);
                     handleTimeout();
@@ -367,8 +400,6 @@
         }
 
         function handleTimeout() {
-            // 為了避免所有人同時觸發更新，我們讓「下一個玩家」負責觸發超時
-            // 如果下一個玩家也斷線，則由「房主」(第一個進入的人) 負責
             const turnOrder = roomData.turnOrder;
             const nextIdx = (roomData.currentTurn + 1) % 4;
             const players = Object.values(roomData.players || {}).sort((a, b) => a.joinedAt - b.joinedAt);
@@ -376,7 +407,6 @@
             const isNextPlayer = turnOrder[nextIdx] === myId;
 
             if (isNextPlayer || (isHost && !roomData.players[turnOrder[nextIdx]])) {
-                console.log("偵測到超時，自動跳過該回合");
                 const nextTurn = (roomData.currentTurn + 1) % 4;
                 db.ref('rooms/' + currentRoomId).update({
                     currentTurn: nextTurn,
@@ -385,20 +415,11 @@
             }
         }
 
-        let isRolling = false;
-
-        // 更新骰子畫面
         function updateDiceUI(value) {
             const dice = document.getElementById('dice');
             const dots = {
-                1: [4],
-                2: [0, 8],
-                3: [0, 4, 8],
-                4: [0, 2, 6, 8],
-                5: [0, 2, 4, 6, 8],
-                6: [0, 2, 3, 5, 6, 8],
+                1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
             }[value] || [];
-
             dice.innerHTML = Array.from({ length: 9 }).map((_, i) => `
                 <div class="flex items-center justify-center">
                     ${dots.includes(i) ? '<div class="w-2.5 h-2.5 bg-slate-800 rounded-full"></div>' : ''}
